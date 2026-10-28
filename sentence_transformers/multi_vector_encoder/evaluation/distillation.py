@@ -219,6 +219,11 @@ class MultiVectorDistillationEvaluator(BaseEvaluator):
         # batchmean averages the per-query KL over queries. On the flat path it would divide the
         # single global KL by the number of pairs, so report the full sum there instead.
         reduction = "batchmean" if self.nested_documents else "sum"
+        # A zero-probability teacher target contributes zero KL. Using -inf here
+        # makes log-target KL evaluate 0 * -inf; the finite minimum still exponentiates to zero.
+        teacher_log_probs = teacher_log_probs.masked_fill(
+            teacher_log_probs.isneginf(), torch.finfo(teacher_log_probs.dtype).min
+        )
         kl = torch.nn.functional.kl_div(student_log_probs, teacher_log_probs, reduction=reduction, log_target=True)
         kl = kl.item() * self.student_temperature**2
         if self.nested_documents:
