@@ -4,6 +4,7 @@ import math
 from collections.abc import Callable, Iterable
 from typing import Any
 
+import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
@@ -182,6 +183,11 @@ class MultiVectorDistillKLDivLoss(nn.Module):
         if not self._checked_teacher_scale:
             self._checked_teacher_scale = True
             check_teacher_targets(teacher_log_probs.exp(), labels, self.teacher_temperature, type(self).__name__)
+        # A zero-probability teacher target contributes zero KL. Using -inf here
+        # makes log-target KL evaluate 0 * -inf; the finite minimum still exponentiates to zero.
+        teacher_log_probs = teacher_log_probs.masked_fill(
+            teacher_log_probs.isneginf(), torch.finfo(teacher_log_probs.dtype).min
+        )
         loss = self.loss_function(student_log_probs, teacher_log_probs)
         return loss * (self.student_temperature**2)
 
